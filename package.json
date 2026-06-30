@@ -1,0 +1,15 @@
+{
+  "name": "ai-traffic-alerts-for-cloudflare",
+  "version": "1.0.0",
+  "description": "Get a push notification the moment an AI assistant crawls your site or sends you a visitor.",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "keywords": ["ai", "seo", "aeo", "geo", "chatgpt", "perplexity", "cloudflare-worker", "ai-crawler", "ai-visibility"],
+  "license": "MIT",
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

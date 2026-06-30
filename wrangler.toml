@@ -1,0 +1,32 @@
+name = "ai-traffic-alerts-for-cloudflare"
+main = "src/worker.js"
+compatibility_date = "2026-06-01"
+
+# 1) Route this Worker in front of your site. Replace with your zone and pattern.
+# routes = [ { pattern = "example.com/*", zone_name = "example.com" } ]
+
+# 2) Optional but recommended: a KV namespace to throttle high-volume crawler
+#    alerts (one per vendor+purpose per window). Create it with:
+#      npx wrangler kv namespace create RADAR_KV
+#    then paste the returned id below and uncomment the block.
+# [[kv_namespaces]]
+# binding = "RADAR_KV"
+# id = "<your-kv-namespace-id>"
+
+[vars]
+# One crawler alert per vendor+purpose per N seconds. Set to "0" to alert on
+# every crawl (noisy), or raise it if your phone buzzes too much.
+CRAWLER_THROTTLE_SECONDS = "3600"
+
+# ntfy is the zero-setup channel: no account, just install the ntfy app and
+# subscribe to your topic. Choose a long, hard-to-guess topic name.
+# NTFY_SERVER = "https://ntfy.sh"
+# NTFY_TOPIC = "change-me-to-something-secret"
+
+# Other channels are set as SECRETS (never commit them):
+#   npx wrangler secret put TELEGRAM_BOT_TOKEN
+#   npx wrangler secret put TELEGRAM_CHAT_ID
+#   npx wrangler secret put DISCORD_WEBHOOK_URL
+#   npx wrangler secret put PUSHOVER_TOKEN
+#   npx wrangler secret put PUSHOVER_USER
+#   npx wrangler secret put GENERIC_WEBHOOK_URL   # POST raw JSON event anywhere
