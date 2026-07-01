@@ -184,7 +184,7 @@ Both lists live at the top of [`src/worker.js`](src/worker.js). These signatures
 
 - **Google/Gemini and Apple training opt-in.** `Google-Extended` and `Applebot-Extended` are robots.txt control tokens that do **not** crawl under their own user-agent (Google's docs say so directly), so no edge tool can detect them by user-agent.
 - **Gemini rarely fetches live.** In our log analysis Gemini answered from Google's existing index with essentially no live retrieval fetch, so there is often nothing to see at your edge.
-- **Copilot and Grok arrive as plain browsers.** Their human clickthroughs look like an ordinary Chrome or Safari visit, so they cannot be reliably separated from normal traffic.
+- **Copilot and Grok often arrive without a tell.** A lot of their clickthrough traffic reaches you as an ordinary browser with no identifying referer, so it blends into normal visits. This tool still catches the cases where their web app sends a `copilot.microsoft.com` or `grok.com` referer; expect to miss the rest.
 - **Google AI Overviews / AI Mode referrals** arrive as plain `google.com` and are indistinguishable from an ordinary Google click, so they are not flagged (flagging them would mislabel most of your Google traffic).
 - **User-agents can be spoofed.** This is an alerting tool, so a rare spoofed crawler UA just means one extra notification, not a security hole.
 
