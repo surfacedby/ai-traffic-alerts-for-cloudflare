@@ -100,25 +100,29 @@ const AI_CRAWLERS = [
   { token: "Timpibot", vendor: "Timpi", purpose: "search" },
 ];
 
-// Referrer hosts (and utm_source values) that mean a HUMAN arrived from an AI
-// assistant's answer. This is the high-value signal: a real person the AI sent
-// you. Kept HIGH-CONFIDENCE on purpose: general search engines (bing.com,
-// duckduckgo.com) and social sites (x.com) are NOT here, because a click from
-// those is almost never the AI product itself and would cry wolf on ordinary
-// traffic. Google AI Overviews / AI Mode referrals arrive as plain google.com
-// and are indistinguishable from a normal Google click, so they are not listed
-// either.
+// Referrer hosts that mean a HUMAN arrived from an AI assistant's answer. This
+// is the high-value signal: a real person the AI sent you. Each entry can also
+// carry `apps` (native mobile app package names): when an AI app opens a link in
+// the browser the referer is `android-app://<package>/` with no web host, so the
+// package is the only signal. utm_source is matched separately (AI apps often
+// strip the referer but keep the query string).
+//
+// Kept HIGH-CONFIDENCE on purpose: general search engines (bing.com,
+// duckduckgo.com, you.com) and social sites (x.com) are NOT here, because a
+// click from those is almost never the AI product itself and would cry wolf on
+// ordinary traffic. Google AI Overviews / AI Mode referrals arrive as plain
+// google.com and are indistinguishable from a normal Google click, so they are
+// not listed either.
 const AI_REFERRERS = [
-  { host: "chatgpt.com", vendor: "ChatGPT" },
+  { host: "chatgpt.com", vendor: "ChatGPT", apps: ["com.openai.chatgpt"] },
   { host: "chat.openai.com", vendor: "ChatGPT" },
-  { host: "perplexity.ai", vendor: "Perplexity" },
-  { host: "gemini.google.com", vendor: "Gemini" },
-  { host: "claude.ai", vendor: "Claude" },
-  { host: "copilot.microsoft.com", vendor: "Microsoft Copilot" },
+  { host: "perplexity.ai", vendor: "Perplexity", apps: ["ai.perplexity.app.android"] },
+  { host: "gemini.google.com", vendor: "Gemini", apps: ["com.google.android.apps.bard"] },
+  { host: "claude.ai", vendor: "Claude", apps: ["com.anthropic.claude"] },
+  { host: "copilot.microsoft.com", vendor: "Microsoft Copilot", apps: ["com.microsoft.copilot"] },
   { host: "poe.com", vendor: "Poe" },
-  { host: "grok.com", vendor: "Grok" },
+  { host: "grok.com", vendor: "Grok", apps: ["ai.x.grok"] },
   { host: "meta.ai", vendor: "Meta AI" },
-  { host: "you.com", vendor: "You.com" },
 ];
 
 // Pre-lowercased crawler tokens so matching is case-insensitive without redoing
@@ -164,10 +168,14 @@ export function classify(userAgent, referer, url, mode = "both") {
 
   if (mode === "crawlers") return { kind: null };
 
-  // A human from an AI answer. The referer host is the primary signal, but AI
-  // apps often strip the referer entirely, so also check utm_source on the
-  // landing URL: ChatGPT (and others) stamp utm_source=chatgpt.com precisely
-  // when they drop the referer. Without this, most AI referrals go unseen.
+  // A human from an AI answer, matched three ways (mirrors the internal edge
+  // tracker):
+  //   1. web referer host (chatgpt.com and friends),
+  //   2. native-app referer: an AI mobile app opens the link as
+  //      android-app://<package>/, so `host` is the package name, and
+  //   3. utm_source on the landing URL, because AI apps often strip the referer
+  //      but keep the query string (ChatGPT stamps utm_source=chatgpt.com).
+  // Without 2 and 3 most mobile AI referrals go unseen.
   const host = hostFromReferer(referer);
   let utm = "";
   try {
@@ -177,13 +185,15 @@ export function classify(userAgent, referer, url, mode = "both") {
   }
   for (const ref of AI_REFERRERS) {
     const byReferer = hostMatches(host, ref.host);
+    const byApp = !!ref.apps && ref.apps.includes(host);
     const byUtm = utmMatches(utm, ref.host);
-    if (byReferer || byUtm) {
+    if (byReferer || byApp || byUtm) {
       return {
         kind: "referral",
         vendor: ref.vendor,
-        host: host || ref.host,
-        via: byReferer ? "referrer" : "utm_source",
+        // Report the canonical AI host, not the raw android-app package.
+        host: byReferer ? host : ref.host,
+        via: byReferer ? "referrer" : byApp ? "app" : "utm_source",
       };
     }
   }

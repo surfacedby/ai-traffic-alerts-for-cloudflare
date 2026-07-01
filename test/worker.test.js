@@ -48,6 +48,27 @@ test("utm_source matches a short token too (utm_source=perplexity)", () => {
   assert.equal(r.vendor, "Perplexity");
 });
 
+test("detects a native AI app referral (android-app package)", () => {
+  // A ChatGPT/Claude/etc. mobile app opens the link with no web referer, only
+  // android-app://<package>/. Report the canonical host, not the package.
+  const r = classify("Mozilla/5.0 (Linux; Android 14)", "android-app://com.openai.chatgpt/", LANDING);
+  assert.equal(r.kind, "referral");
+  assert.equal(r.vendor, "ChatGPT");
+  assert.equal(r.via, "app");
+  assert.equal(r.host, "chatgpt.com");
+  assert.equal(classify("Mozilla/5.0", "android-app://com.anthropic.claude/", LANDING).vendor, "Claude");
+});
+
+test("ignores an unknown android-app package", () => {
+  assert.equal(classify("Mozilla/5.0", "android-app://com.example.reader/", LANDING).kind, null);
+});
+
+test("does NOT treat you.com as an AI referral (general search, ambiguous)", () => {
+  // Same reasoning as bing.com / duckduckgo.com: you.com is a general search
+  // engine, so a click from it is not reliably the AI product.
+  assert.equal(classify("Mozilla/5.0", "https://you.com/", LANDING).kind, null);
+});
+
 test("does NOT flag general search or social as an AI referral", () => {
   // These are ambiguous: a click from Bing search or a link on X is almost
   // never the AI product itself. Flagging them would cry wolf on normal traffic.
