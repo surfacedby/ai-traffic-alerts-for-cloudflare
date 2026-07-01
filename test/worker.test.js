@@ -1,9 +1,16 @@
 // Detection tests. Zero dependencies: run with `npm test` (node --test).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { classify, resolveAlertMode } from "../src/worker.js";
+import { classify, resolveAlertMode, resolveSiteHost } from "../src/worker.js";
 
 const LANDING = "https://mysite.com/pricing";
+
+// Minimal request stand-in: only .url and .headers.get are read by the worker.
+function fakeRequest(url, headers = {}) {
+  const lower = {};
+  for (const [k, v] of Object.entries(headers)) lower[k.toLowerCase()] = v;
+  return { url, headers: { get: (name) => lower[name.toLowerCase()] ?? null } };
+}
 
 test("detects an AI crawler by user-agent token", () => {
   const r = classify("Mozilla/5.0 (compatible; GPTBot/1.1; +https://openai.com/gptbot)", null, LANDING);
@@ -134,6 +141,26 @@ test("ALERT_ON=crawlers ignores referrals but still catches crawlers", () => {
 test("default mode (both) detects either signal", () => {
   assert.equal(classify("Mozilla/5.0 (compatible; GPTBot/1.1)", null, LANDING).kind, "crawler");
   assert.equal(classify("Mozilla/5.0", "https://claude.ai/", LANDING).kind, "referral");
+});
+
+test("resolveSiteHost prefers the Host header over the URL hostname", () => {
+  // A *.workers.dev test hit still carries the routed domain in Host on a
+  // real route; on the raw workers.dev URL the Host is workers.dev and the
+  // alert honestly says so.
+  const routed = fakeRequest("https://ai-alerts.acme.workers.dev/pricing", { host: "mysite.com" });
+  assert.equal(resolveSiteHost(routed, {}), "mysite.com");
+  const rawTest = fakeRequest("https://ai-alerts.acme.workers.dev/pricing", { host: "ai-alerts.acme.workers.dev" });
+  assert.equal(resolveSiteHost(rawTest, {}), "ai-alerts.acme.workers.dev");
+});
+
+test("SITE_DOMAIN overrides the displayed host and is normalized", () => {
+  const req = fakeRequest("https://ai-alerts.acme.workers.dev/pricing", { host: "ai-alerts.acme.workers.dev" });
+  assert.equal(resolveSiteHost(req, { SITE_DOMAIN: "mysite.com" }), "mysite.com");
+  assert.equal(resolveSiteHost(req, { SITE_DOMAIN: "https://mysite.com/" }), "mysite.com");
+});
+
+test("resolveSiteHost falls back to the URL hostname when no Host header", () => {
+  assert.equal(resolveSiteHost(fakeRequest("https://mysite.com/x"), {}), "mysite.com");
 });
 
 test("ALERT_ON defaults to referrals (crawlers are opt-in)", () => {

@@ -31,26 +31,24 @@ You need a site that is **already on Cloudflare** (its traffic is proxied by Clo
 
 Then get the Worker deployed one of three ways:
 
-- **[Deploy from GitHub](#option-a-deploy-from-github-no-terminal)** - Cloudflare builds it straight from this repo. No terminal, no copy-paste.
+- **[Deploy from GitHub](#option-a-deploy-from-github-no-terminal)** - fork this repo and Cloudflare builds it straight from your fork. No terminal, no copy-paste.
 - **[Paste into the dashboard](#option-b-paste-into-the-dashboard-no-terminal)** - copy one file into the Worker editor. No terminal.
-- **[Command line](#option-c-command-line-wrangler)** - `git` + `wrangler`, for developers.
+- **[Command line](#option-c-command-line-wrangler)** - `git` + `wrangler`, the most reliable path for developers.
 
 After the first two, do the one-time [Configure the Worker](#configure-the-worker-after-option-a-or-b) step.
 
 ### Option A: Deploy from GitHub (no terminal)
 
-The easiest path: Cloudflare copies this repo into your own Git account and deploys it, so every later change auto-deploys.
+Fork this repo, then let Cloudflare import your fork and deploy it. Forking is what makes this reliable: Cloudflare deploys straight from a repo you already own, so there is no create-repo step to fail, and every later change you make auto-deploys.
 
-1. In the [Cloudflare dashboard](https://dash.cloudflare.com), open **Workers & Pages** and click **Create application**.
-2. On **Ship something new**, click **Continue with GitHub** (authorize Cloudflare if prompted; **Connect GitLab** works too).
-3. Click **Clone a public repository via Git URL** and paste:
+1. **Fork this repository** to your own GitHub account (the **Fork** button, top right of the repo page).
+2. In the [Cloudflare dashboard](https://dash.cloudflare.com), open **Workers & Pages** and click **Create application**.
+3. Click **Continue with GitHub** and authorize the Cloudflare GitHub app to access your fork when prompted.
+4. Select your fork from the repository list and click **Next**.
+5. Accept the defaults and click **Deploy**. Cloudflare reads `wrangler.toml`, so `ALERT_ON` (referrals) and `CRAWLER_THROTTLE_SECONDS` are already filled in and the deploy command is `npx wrangler deploy`. **You do not need to open Advanced settings** - ignore the non-production-branch build command, the build token, and any "token is missing permissions" notice. None of it matters here.
+6. Now do [Configure the Worker](#configure-the-worker-after-option-a-or-b): this deploy runs, but it will not alert anyone until you add a notification channel and a route.
 
-   ```
-   https://github.com/surfacedby/ai-traffic-alerts-for-cloudflare.git
-   ```
-
-4. On **Set up your application**, accept the defaults and click **Deploy**. Cloudflare creates a private copy in your Git account and reads `wrangler.toml`, so `ALERT_ON` (referrals) and `CRAWLER_THROTTLE_SECONDS` are already filled in and the deploy command is `npx wrangler deploy`. **You do not need to open Advanced settings** - ignore the non-production-branch build command, the build token, and any "token is missing permissions" notice. None of it matters here.
-5. Now do [Configure the Worker](#configure-the-worker-after-option-a-or-b): this deploy runs, but it will not alert anyone until you add a notification channel and a route.
+**Fallback: Clone a public repository via Git URL.** On **Ship something new** you can instead click **Clone a public repository via Git URL** and paste `https://github.com/surfacedby/ai-traffic-alerts-for-cloudflare.git`. This asks Cloudflare to create a fresh copy of the repo in your account, which can return **HTTP 400 at the Deploy step** (before any build runs) if the Cloudflare GitHub App lacks permission to create a repo (it is installed with "Only select repositories") or a repo of that name already exists. Forking first, as above, avoids this.
 
 ### Option B: Paste into the dashboard (no terminal)
 
@@ -62,7 +60,7 @@ The easiest path: Cloudflare copies this repo into your own Git account and depl
 
 The tool does not auto-pick where alerts go - it cannot know your phone or chat - so setting one notification channel is the single required step. Without it the Worker runs but stays silent (and logs "no notification channel is configured"). You do this in the Worker's own **Settings** after deploy; you do not need the wizard's Advanced settings.
 
-1. **Notification channel (required).** **Variables and Secrets -> Add** a variable named `NTFY_TOPIC` with your topic from above. For token-based channels (Telegram, WhatsApp, Pushover) use the **Secret / Encrypt** type; see [Notification channels](#notification-channels) for exact names. Set as many channels as you want - it alerts on all of them.
+1. **Notification channel (required).** **Variables and Secrets -> Add** your channel values and **set the Type to Secret** (not Text) for every one of them: `NTFY_TOPIC` for ntfy, and likewise the Telegram, WhatsApp, Pushover, Discord, and generic-webhook values (see [Notification channels](#notification-channels) for exact names). On the Deploy-from-GitHub path this is not optional for **any** of them: a Git-connected Worker rebuilds from `wrangler.toml` on every deploy and treats its `[vars]` as the complete set, so any plaintext dashboard variable is **silently wiped on the next build** - the Worker then still detects traffic and sends nothing, while Settings still shows the (now-empty) variable. Secrets are stored separately and survive builds. Set as many channels as you want - it alerts on all of them.
 2. **What to alert on.** Add `ALERT_ON` set to `referrals`, `crawlers`, or `both`. It **defaults to `referrals`** (the rare, high-value signal, and it needs no KV), so you can even skip this. Turn on the noisy crawler signal only if you want it.
 3. **Put it in front of your site.** **Domains & Routes -> Add -> Route**, pattern `yourdomain.com/*`, your zone. Choose **Route**, not *Custom domain*: a route runs the Worker on your existing site and passes traffic through to it.
 4. **(Only if you set `ALERT_ON` to `crawlers` or `both`) throttle crawlers.** Create a KV namespace under **Storage & Databases -> KV -> Create a namespace**, name it `RADAR_KV`, then bind it in the Worker under **Settings -> Bindings -> Add binding -> KV namespace** with the **Variable name** `RADAR_KV`. It dedupes crawler alerts to one per vendor per purpose per hour. `referrals` mode never touches KV.
@@ -71,7 +69,7 @@ That is it. See [Test that it works](#test-that-it-works) to confirm.
 
 ### Option C: Command line (wrangler)
 
-You need Node and `npx`.
+The most reliable path if you are comfortable in a terminal: it deploys directly to your account, with no GitHub-App repo-creation step that can fail. You need Node and `npx`.
 
 ```bash
 git clone https://github.com/surfacedby/ai-traffic-alerts-for-cloudflare
@@ -120,7 +118,7 @@ Set any one (or several). The Worker sends to every channel you configure. Each 
 
 Every channel is fire-and-forget with a 10-second timeout and checks the response, so one slow or misconfigured channel can neither delay the others nor break the request being served. Failures are logged with the channel name and HTTP status so you can see exactly what went wrong.
 
-Where to put the values: in the **dashboard**, open the Worker's **Settings -> Variables and Secrets -> Add** (use the **Secret / Encrypt** type for anything token-like). On the **command line**, plaintext values (like `NTFY_TOPIC`) can go in `wrangler.toml`, and secrets use `npx wrangler secret put NAME`.
+Where to put the values: `NTFY_TOPIC` and every channel token are **Secrets**, never plaintext. `NTFY_TOPIC` behaves like a password (anyone who knows the topic can read your alerts), and this repo is public, so it must never live in `wrangler.toml`. In the **dashboard**, open the Worker's **Settings -> Variables and Secrets -> Add** and choose **Type: Secret**. On the **command line**, use `npx wrangler secret put NAME`. Only non-sensitive settings (`ALERT_ON`, `CRAWLER_THROTTLE_SECONDS`, and the optional `SITE_DOMAIN` / `NTFY_SERVER`) belong in `wrangler.toml`. On a Git-connected (Builds) Worker, a plaintext variable added only in the dashboard is wiped on the next build; a Secret is not.
 
 ### ntfy setup (1 minute, no account)
 
@@ -189,6 +187,8 @@ If you alert on crawlers, they can hit you a lot, so they are throttled to **one
 - **Simulate a human from ChatGPT:** open `https://yourdomain.com/?utm_source=chatgpt.com` in a browser. You should get an "AI sent you a visitor" alert within a few seconds. (Works in `referrals` and `both` modes.)
 - **Simulate a crawler:** `curl -A "GPTBot" https://yourdomain.com/`. You should get an "AI crawler" alert (once per hour per vendor unless you set `CRAWLER_THROTTLE_SECONDS=0`). Only fires when `ALERT_ON` is `crawlers` or `both`.
 
+The alert names the site the visitor actually hit (the request Host). If you test against the Worker's own `*.workers.dev` URL instead of a routed domain, the alert will honestly read `...workers.dev`; on your real route it shows your real domain. To pin a fixed label regardless (handy while testing), set a `SITE_DOMAIN` variable in `wrangler.toml` to your domain and it overrides the displayed host.
+
 ## Troubleshooting
 
 Not getting alerts? Check, in order:
@@ -197,8 +197,11 @@ Not getting alerts? Check, in order:
 2. **Read the Worker logs.** Open the Worker -> **Logs** (or `npx wrangler tail`) and reload your test URL. The logs are explicit about the common failures:
    - `AI signal detected but NO notification channel is configured` - you have not set `NTFY_TOPIC` or any other channel.
    - `telegram channel failed: HTTP 401 ...` (or ntfy/whatsapp/discord/pushover/webhook) - the channel is set but the token, chat id, key, or URL is wrong. The status code tells you which.
-3. **Subscribed to the right ntfy topic?** The topic in the app must match `NTFY_TOPIC` exactly, and notifications must be enabled for the ntfy app on your phone.
-4. **Crawler alert throttled?** You only get one per vendor per purpose per hour. Set `CRAWLER_THROTTLE_SECONDS=0` and test again.
+3. **A channel shows in Settings but the log says no channel is configured (or a token looks set but fails empty)?** On the Deploy-from-GitHub path this means you added that value as a plaintext (Text) variable and the last build wiped it. This is true for **every** channel value, not just ntfy. Re-add each one (`NTFY_TOPIC`, `TELEGRAM_BOT_TOKEN`, and the rest) with **Type: Secret**, which survives builds, then redeploy.
+4. **Subscribed to the right ntfy topic?** The topic in the app must match `NTFY_TOPIC` exactly, and notifications must be enabled for the ntfy app on your phone.
+5. **Crawler alert throttled?** You only get one per vendor per purpose per hour. Set `CRAWLER_THROTTLE_SECONDS=0` and test again.
+
+**Deploy returns HTTP 400 (before any build runs).** You used **Clone a public repository via Git URL** and the Cloudflare GitHub App cannot create the copied repo in your account. Fork the repo to your account and import your fork instead (Option A above), or widen the Cloudflare GitHub App's repository access in GitHub under **Settings -> Applications -> Installed GitHub Apps -> Cloudflare -> Configure**.
 
 ## How detection works
 

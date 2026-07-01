@@ -407,13 +407,30 @@ export function resolveAlertMode(env) {
   return ALERT_MODES.has(mode) ? mode : "referrals";
 }
 
+// The displayed site host. SITE_DOMAIN wins when set (lets you pin the real
+// domain even while testing on *.workers.dev). Otherwise use the request Host
+// header, which reflects the domain the visitor actually hit on a route; the
+// URL hostname is the last resort. This is display only: passthrough is
+// always to the original request.
+export function resolveSiteHost(request, env) {
+  const override = String(env.SITE_DOMAIN ?? "").trim();
+  if (override) return override.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+  const host = request.headers.get("host");
+  if (host) return host;
+  try {
+    return new URL(request.url).hostname;
+  } catch {
+    return "";
+  }
+}
+
 async function handleSignal(info, request, env) {
   if (info.kind === "crawler") {
     const ok = await shouldSendCrawler(env, `radar:${info.vendor}:${info.purpose}`);
     if (!ok) return;
   }
   const url = request.url;
-  const site = new URL(url).hostname;
+  const site = resolveSiteHost(request, env);
   const country = request.headers.get("cf-ipcountry") || "";
   await sendAlert(env, buildMessage(site, info, url, country));
 }

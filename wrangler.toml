@@ -25,13 +25,21 @@ ALERT_ON = "referrals"
 # phone buzzes too much.
 CRAWLER_THROTTLE_SECONDS = "3600"
 
-# ntfy is the zero-setup channel: no account, just install the ntfy app and
-# subscribe to your topic. Choose a long, hard-to-guess topic name.
-# NTFY_SERVER = "https://ntfy.sh"
-# NTFY_TOPIC = "change-me-to-something-secret"
+# Optional. Force the domain shown in the alert text. Leave unset in production:
+# the alert then reports the Host the visitor actually hit (your routed domain).
+# Set it only if you want a fixed label while testing on a *.workers.dev URL.
+# SITE_DOMAIN = "mysite.com"
 
-# Other channels are set as SECRETS (never commit them). See the README for how
-# to obtain each value (Telegram bot token + chat id, WhatsApp CallMeBot key):
+# Self-hosting ntfy? Set the server here (not sensitive). Defaults to ntfy.sh.
+# NTFY_SERVER = "https://ntfy.sh"
+
+# NOTE: sensitive values are NEVER put in [vars] and NEVER committed. This repo
+# is public, and on a Git-connected (Builds) Worker every deploy rebuilds from
+# this file, so [vars] is treated as the complete set: any plaintext variable
+# you add only in the dashboard gets wiped on the next build. NTFY_TOPIC acts
+# like a password (anyone who knows it can read your alerts), so it and every
+# channel token must be SECRETS, which are stored separately and survive builds:
+#   npx wrangler secret put NTFY_TOPIC           # your long, hard-to-guess topic
 #   npx wrangler secret put TELEGRAM_BOT_TOKEN
 #   npx wrangler secret put TELEGRAM_CHAT_ID
 #   npx wrangler secret put WHATSAPP_PHONE       # your number incl. country code, e.g. +15551234567
@@ -40,3 +48,5 @@ CRAWLER_THROTTLE_SECONDS = "3600"
 #   npx wrangler secret put PUSHOVER_TOKEN
 #   npx wrangler secret put PUSHOVER_USER
 #   npx wrangler secret put GENERIC_WEBHOOK_URL   # POST raw JSON event anywhere
+# In the dashboard the equivalent is Settings > Variables and secrets > Add >
+# Type: Secret.
