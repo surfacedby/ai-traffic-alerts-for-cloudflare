@@ -59,7 +59,10 @@ const AI_CRAWLERS = [
   // Meta
   { token: "meta-externalagent", vendor: "Meta", purpose: "training" },
   { token: "meta-externalfetcher", vendor: "Meta", purpose: "retrieval" },
+  { token: "meta-webindexer", vendor: "Meta", purpose: "search" },
   { token: "FacebookBot", vendor: "Meta", purpose: "training" },
+  // Manus (agentic browsing)
+  { token: "Manus-User", vendor: "Manus", purpose: "retrieval" },
   // Amazon
   { token: "Amazonbot", vendor: "Amazon", purpose: "retrieval" },
   // ByteDance

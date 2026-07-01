@@ -173,6 +173,8 @@ Not getting alerts? Check, in order:
 
 ## How detection works
 
+The core idea - that "AI traffic" is really two separate signals (a provider fetching your page versus a human clicking through from an AI answer), detected two different ways - comes from our own analysis of real server logs: [What nginx logs prove about AI traffic vs referral traffic](https://surfacedby.com/blog/nginx-logs-ai-traffic-vs-referral-traffic). This tool applies those findings at the Cloudflare edge.
+
 - **Crawlers** are matched by user-agent token (GPTBot, ClaudeBot, PerplexityBot, and the rest), each tagged with its vendor and purpose. Matching is case-insensitive.
 - **Referrals** are matched by the referer hostname (chatgpt.com, perplexity.ai, gemini.google.com, claude.ai, and more) **and** by `utm_source` on the landing URL, because AI apps frequently strip the referer and stamp `utm_source=chatgpt.com` instead. The referrer list is deliberately high-confidence: general search (bing.com, duckduckgo.com) and social (x.com) are excluded so ordinary traffic never triggers a false "AI" alert.
 
@@ -181,10 +183,12 @@ Both lists live at the top of [`src/worker.js`](src/worker.js). These signatures
 ## What it cannot see (honest limits)
 
 - **Google/Gemini and Apple training opt-in.** `Google-Extended` and `Applebot-Extended` are robots.txt control tokens that do **not** crawl under their own user-agent (Google's docs say so directly), so no edge tool can detect them by user-agent.
+- **Gemini rarely fetches live.** In our log analysis Gemini answered from Google's existing index with essentially no live retrieval fetch, so there is often nothing to see at your edge.
+- **Copilot and Grok arrive as plain browsers.** Their human clickthroughs look like an ordinary Chrome or Safari visit, so they cannot be reliably separated from normal traffic.
 - **Google AI Overviews / AI Mode referrals** arrive as plain `google.com` and are indistinguishable from an ordinary Google click, so they are not flagged (flagging them would mislabel most of your Google traffic).
 - **User-agents can be spoofed.** This is an alerting tool, so a rare spoofed crawler UA just means one extra notification, not a security hole.
 
-For the parts this cannot see - citations, prompts, competitors, and revenue across every assistant - use [SurfacedBy](https://surfacedby.com).
+These asymmetries across vendors are the subject of the research above; measuring AI-driven traffic evenly across every assistant needs cross-assistant measurement, not edge logs alone. For the parts this cannot see - citations, prompts, competitors, and revenue across every assistant - use [SurfacedBy](https://surfacedby.com).
 
 ## Privacy
 
