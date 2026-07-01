@@ -1,9 +1,8 @@
 # ai-traffic-alerts-for-cloudflare
 
-Get a push notification the moment an AI assistant touches your site:
+Get a push notification the moment an AI assistant sends you a real visitor: a person who clicked through from a ChatGPT, Perplexity, Gemini, Claude, Copilot, or Grok answer. A visitor an AI actively pointed at you is rare and high-value, and this tells you the instant it happens.
 
-- An **AI crawler** fetches a page (and whether it came to train on it, index it, or answer a user live).
-- A **human arrives from an AI answer** (ChatGPT, Perplexity, Gemini, Claude, Copilot, and more).
+It can also alert on **AI crawlers** fetching your pages (to train on them, index them, or answer a user live). That is the far higher-volume signal: a busy site sees thousands of crawler hits a day. One setting, `ALERT_ON`, chooses which signals fire (`referrals`, `crawlers`, or `both`; default `both`). Because crawlers are so much noisier, many people set `ALERT_ON=referrals`.
 
 It runs as a single Cloudflare Worker in front of your site, inspects each request at the edge, fires a notification to your phone, and passes the request straight through to your origin. No tracking script, no database, no change to your pages. Detection and notifications run off the response path, so your site is never slowed down.
 
@@ -15,10 +14,10 @@ Most "AI bot" tools are about *blocking*. But the AI crawl is not the threat, it
 
 | This tool (free) tells you | It cannot tell you |
 |---|---|
-| An AI crawler hit your site, which vendor, and its purpose (train / index / answer live) | Whether the AI actually **cited** you in an answer |
-| A human landed on your site from an AI assistant | **Which prompts** you show up for, and which you are missing |
-| Which page they hit, and the visitor's country | Whether the AI recommended a **competitor** instead of you |
-| Real-time, at your edge | Whether that visibility turned into **signups or revenue** |
+| A human landed on your site from an AI assistant, and on which page | Whether the AI actually **cited** you in an answer |
+| An AI crawler hit your site, which vendor, and its purpose (train / index / answer live) | **Which prompts** you show up for, and which you are missing |
+| The visitor's country, real-time, at your edge | Whether the AI recommended a **competitor** instead of you |
+| Which signals to be alerted on (referrals, crawlers, or both) | Whether that visibility turned into **signups or revenue** |
 
 The right-hand column is the actual job of AI visibility, and it needs measurement across the assistants, not just your own logs. This tool is the free first look at what reaches your edge.
 
@@ -39,13 +38,15 @@ Either way, first do this one-minute step:
 
 1. **Create the Worker.** In the [Cloudflare dashboard](https://dash.cloudflare.com), go to **Compute (Workers) -> Workers & Pages -> Create -> Start with Hello World -> Get started**. Give it a name like `ai-traffic-alerts` and create it.
 
-2. **Paste the code.** Click **Edit code** (the `</>` button). Select all of the sample code and delete it, then paste the entire contents of [`src/worker.js`](https://raw.githubusercontent.com/surfacedby/ai-traffic-alerts-for-cloudflare/main/src/worker.js) from this repo (open that link, select all, copy). Click **Deploy**.
+2. **Paste the code.** Click **Edit code** (the `</>` button). Select all of the sample code and delete it, then paste the entire contents of [`src/worker.js`](https://raw.githubusercontent.com/surfacedby/ai-traffic-alerts-for-cloudflare/master/src/worker.js) from this repo (open that link, select all, copy). Click **Deploy**.
 
 3. **Add your notification channel.** Open the Worker's **Settings -> Variables and Secrets -> Add**. Add a variable named `NTFY_TOPIC` with your secret topic from above. (For channels that use a token, such as Telegram, choose the **Secret / Encrypt** type instead of plaintext. See [Notification channels](#notification-channels) for the exact names.)
 
 4. **Put it in front of your site.** In the Worker's **Settings -> Domains & Routes -> Add -> Route**. Set the route pattern to `yourdomain.com/*` and pick your zone. Choose **Route**, not *Custom domain*: a route runs the Worker on your existing site and passes traffic through to it, which is exactly what this tool does.
 
-5. **(Recommended) stop crawlers from spamming you.** By default the tool sends one alert per vendor per purpose per hour, which needs a small KV store. Create it under **Storage & Databases -> KV -> Create a namespace**, name it `RADAR_KV`. Then back in the Worker, open **Settings -> Bindings -> Add binding -> KV namespace**, set the **Variable name** to exactly `RADAR_KV`, and select the namespace. Without this the Worker still runs; it just cannot dedupe, so busy crawlers alert more often (raise `CRAWLER_THROTTLE_SECONDS`, or set it to `0` while testing).
+5. **(Recommended) choose what to alert on.** Under **Settings -> Variables and Secrets -> Add**, add `ALERT_ON` set to `referrals`, `crawlers`, or `both`. It defaults to `both`, but crawlers can be thousands of hits a day while a real AI-referred visitor is rare, so most people set `ALERT_ON=referrals`. In `referrals` mode there is nothing more to do; you can skip the next step.
+
+6. **(Only if you alert on crawlers) stop them from spamming you.** With crawler alerts on, dedupe them to one per vendor per purpose per hour with a small KV store. Create it under **Storage & Databases -> KV -> Create a namespace**, name it `RADAR_KV`. Then back in the Worker, open **Settings -> Bindings -> Add binding -> KV namespace**, set the **Variable name** to exactly `RADAR_KV`, and select the namespace. Without it, busy crawlers alert more often (raise `CRAWLER_THROTTLE_SECONDS`, or set it to `0` while testing). `referrals` mode never touches KV.
 
 That is it. See [Test that it works](#test-that-it-works) to confirm.
 
@@ -59,16 +60,17 @@ cd ai-traffic-alerts-for-cloudflare
 npm install
 ```
 
-1. **Set your channel and route** in `wrangler.toml`:
+1. **Set your channel, route, and what to alert on** in `wrangler.toml`:
 
    ```toml
    routes = [ { pattern = "yourdomain.com/*", zone_name = "yourdomain.com" } ]
 
    [vars]
+   ALERT_ON = "referrals"   # referrals | crawlers | both (default both)
    NTFY_TOPIC = "your-long-secret-topic"
    ```
 
-2. **(Recommended) create the throttle KV** and paste the returned id into the `[[kv_namespaces]]` block in `wrangler.toml`:
+2. **(Only if you alert on crawlers) create the throttle KV** and paste the returned id into the `[[kv_namespaces]]` block in `wrangler.toml`. In `referrals` mode you can skip this:
 
    ```bash
    npx wrangler kv namespace create RADAR_KV
@@ -151,14 +153,22 @@ Set `GENERIC_WEBHOOK_URL` to any endpoint and the Worker POSTs the event as JSON
 - **Zapier / Make:** use a "Catch Hook" trigger and branch on the structured fields.
 - **Your own API / database / CRM:** consume the JSON directly.
 
-## Tuning the noise
+## Choosing what alerts
 
-Crawlers can hit you a lot. By default you get **one alert per vendor per purpose per hour**; human AI-referrals are **never** throttled, because a real person the AI sent you is the signal you always want. Change the window with `CRAWLER_THROTTLE_SECONDS` (set `0` to alert on every single crawl, useful while testing). Throttling uses the optional `RADAR_KV` namespace; without it the Worker still runs and simply does not dedupe.
+`ALERT_ON` decides which signals fire:
+
+- **`referrals`** - only humans an AI sent you. The rare, high-value signal. Crawler detection is skipped entirely, so you need no `RADAR_KV` namespace and no throttling. A good default for most people.
+- **`crawlers`** - only AI crawler hits. Useful if you care about training/indexing coverage.
+- **`both`** (the default) - both signals.
+
+Empty or unrecognized values fall back to `both`.
+
+If you alert on crawlers, they can hit you a lot, so they are throttled to **one alert per vendor per purpose per hour**; human AI-referrals are **never** throttled, because a real person the AI sent you is the signal you always want. Change the window with `CRAWLER_THROTTLE_SECONDS` (set `0` to alert on every single crawl, useful while testing). Throttling uses the optional `RADAR_KV` namespace; without it the Worker still runs and simply does not dedupe. None of this applies in `referrals` mode.
 
 ## Test that it works
 
-- **Simulate a human from ChatGPT:** open `https://yourdomain.com/?utm_source=chatgpt.com` in a browser. You should get an "AI sent you a visitor" alert within a few seconds.
-- **Simulate a crawler:** `curl -A "GPTBot" https://yourdomain.com/`. You should get an "AI crawler" alert (once per hour per vendor unless you set `CRAWLER_THROTTLE_SECONDS=0`).
+- **Simulate a human from ChatGPT:** open `https://yourdomain.com/?utm_source=chatgpt.com` in a browser. You should get an "AI sent you a visitor" alert within a few seconds. (Works in `referrals` and `both` modes.)
+- **Simulate a crawler:** `curl -A "GPTBot" https://yourdomain.com/`. You should get an "AI crawler" alert (once per hour per vendor unless you set `CRAWLER_THROTTLE_SECONDS=0`). Only fires when `ALERT_ON` is `crawlers` or `both`.
 
 ## Troubleshooting
 
@@ -178,13 +188,13 @@ The core idea - that "AI traffic" is really two separate signals (a provider fet
 - **Crawlers** are matched by user-agent token (GPTBot, ClaudeBot, PerplexityBot, and the rest), each tagged with its vendor and purpose. Matching is case-insensitive.
 - **Referrals** are matched by the referer hostname (chatgpt.com, perplexity.ai, gemini.google.com, claude.ai, and more) **and** by `utm_source` on the landing URL, because AI apps frequently strip the referer and stamp `utm_source=chatgpt.com` instead. The referrer list is deliberately high-confidence: general search (bing.com, duckduckgo.com) and social (x.com) are excluded so ordinary traffic never triggers a false "AI" alert.
 
-Both lists live at the top of [`src/worker.js`](src/worker.js). These signatures drift as vendors add and rename bots; the canonical, community-maintained crawler list is [ai-robots-txt/ai.robots.txt](https://github.com/ai-robots-txt/ai.robots.txt). Re-pull it periodically and reconcile the list rather than guessing a token.
+`ALERT_ON` gates which of the two are even looked for, so `referrals` mode does no crawler user-agent matching at all. Both signature lists live at the top of [`src/worker.js`](src/worker.js). These signatures drift as vendors add and rename bots; the canonical, community-maintained crawler list is [ai-robots-txt/ai.robots.txt](https://github.com/ai-robots-txt/ai.robots.txt). Re-pull it periodically and reconcile the list rather than guessing a token.
 
 ## What it cannot see (honest limits)
 
 - **Google/Gemini and Apple training opt-in.** `Google-Extended` and `Applebot-Extended` are robots.txt control tokens that do **not** crawl under their own user-agent (Google's docs say so directly), so no edge tool can detect them by user-agent.
-- **Gemini rarely fetches live.** In our log analysis Gemini answered from Google's existing index with essentially no live retrieval fetch, so there is often nothing to see at your edge.
-- **Copilot and Grok often arrive without a tell.** A lot of their clickthrough traffic reaches you as an ordinary browser with no identifying referer, so it blends into normal visits. This tool still catches the cases where their web app sends a `copilot.microsoft.com` or `grok.com` referer; expect to miss the rest.
+- **Gemini: visitors yes, crawls no.** You do see the humans Gemini sends you (they carry a `gemini.google.com` referer or `utm_source`), but you will not see Gemini crawl your page: it answers from Google's existing index and has no live-fetch user-agent to catch.
+- **Copilot and Grok: partial referral coverage.** Their referrals are caught when the click carries `copilot.microsoft.com` or `grok.com` as the referer or `utm_source`. A chunk arrive with the referer stripped and no `utm_source`, and those are missed - they look like ordinary direct traffic.
 - **Google AI Overviews / AI Mode referrals** arrive as plain `google.com` and are indistinguishable from an ordinary Google click, so they are not flagged (flagging them would mislabel most of your Google traffic).
 - **User-agents can be spoofed.** This is an alerting tool, so a rare spoofed crawler UA just means one extra notification, not a security hole.
 

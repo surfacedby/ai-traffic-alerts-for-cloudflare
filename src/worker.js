@@ -1,14 +1,22 @@
 // ai-traffic-alerts-for-cloudflare
 //
 // A single-file Cloudflare Worker that pings your phone the moment an AI
-// assistant touches your site:
-//   - an AI CRAWLER fetches a page (and whether it came to train on it, index
-//     it, or answer a user live), and
-//   - a HUMAN arrives from an AI answer (ChatGPT, Perplexity, Gemini, Claude...).
+// assistant sends you a real visitor:
+//   - a HUMAN arrives from an AI answer (ChatGPT, Perplexity, Gemini, Claude,
+//     Copilot, Grok...) - the rare, high-value signal, and
+//   - an AI CRAWLER fetches a page (train / index / answer live) - the far
+//     higher-volume signal, which you can turn off.
 //
 // It inspects each request at the edge, fires a best-effort notification OFF the
 // response path, and always passes the request straight through to your origin
 // unchanged. No tracking script, no database, no change to your pages.
+//
+// Choose what alerts with the ALERT_ON environment variable:
+//   - referrals (recommended): only humans an AI sent you. Crawler detection is
+//     skipped entirely, so you need no KV namespace.
+//   - crawlers: only AI crawler hits.
+//   - both (default): both signals. A busy site's crawlers can be thousands of
+//     hits a day, so most people want ALERT_ON=referrals.
 //
 // Deploy it two ways (see README):
 //   - Cloudflare dashboard (no terminal): paste this whole file into the Worker
@@ -141,14 +149,20 @@ function utmMatches(utm, target) {
 }
 
 // Classify a request from its user-agent, referer, and landing URL.
+// `mode` (referrals | crawlers | both) gates which signals are even looked for,
+// so a referrals-only user pays no crawler-matching or KV cost.
 // Returns { kind: "crawler" | "referral" | null, ... }.
-export function classify(userAgent, referer, url) {
-  const ua = (userAgent || "").toLowerCase();
-  for (const bot of AI_CRAWLERS_LC) {
-    if (ua.includes(bot.lc)) {
-      return { kind: "crawler", vendor: bot.vendor, purpose: bot.purpose, token: bot.token };
+export function classify(userAgent, referer, url, mode = "both") {
+  if (mode !== "referrals") {
+    const ua = (userAgent || "").toLowerCase();
+    for (const bot of AI_CRAWLERS_LC) {
+      if (ua.includes(bot.lc)) {
+        return { kind: "crawler", vendor: bot.vendor, purpose: bot.purpose, token: bot.token };
+      }
     }
   }
+
+  if (mode === "crawlers") return { kind: null };
 
   // A human from an AI answer. The referer host is the primary signal, but AI
   // apps often strip the referer entirely, so also check utm_source on the
@@ -179,7 +193,9 @@ export function classify(userAgent, referer, url) {
 // ===========================================================================
 // Throttle (optional KV). One crawler alert per (vendor + purpose) per window
 // so a crawl does not spam your phone. Human referrals are never throttled: a
-// real person the AI sent you is the signal you always want.
+// real person the AI sent you is the signal you always want. In
+// ALERT_ON=referrals mode no crawler is ever detected, so this and RADAR_KV are
+// never touched.
 // ===========================================================================
 
 const DEFAULT_CRAWLER_THROTTLE_SECONDS = 3600;
@@ -368,6 +384,15 @@ async function sendAlert(env, { title, text, payload }) {
 // latency to the request being served. The origin fetch is returned immediately.
 // ===========================================================================
 
+const ALERT_MODES = new Set(["referrals", "crawlers", "both"]);
+
+// ALERT_ON picks which signals fire. Empty or unrecognized falls back to "both"
+// (the original behavior).
+function resolveAlertMode(env) {
+  const mode = String(env.ALERT_ON ?? "").toLowerCase().trim();
+  return ALERT_MODES.has(mode) ? mode : "both";
+}
+
 async function handleSignal(info, request, env) {
   if (info.kind === "crawler") {
     const ok = await shouldSendCrawler(env, `radar:${info.vendor}:${info.purpose}`);
@@ -385,7 +410,8 @@ export default {
       const info = classify(
         request.headers.get("user-agent"),
         request.headers.get("referer"),
-        request.url
+        request.url,
+        resolveAlertMode(env)
       );
       if (info.kind) {
         ctx.waitUntil(

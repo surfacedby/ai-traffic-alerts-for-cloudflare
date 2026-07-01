@@ -75,3 +75,26 @@ test("tolerates missing / malformed inputs without throwing", () => {
   assert.equal(classify(null, null, LANDING).kind, null);
   assert.equal(classify("", "not a url", "also not a url").kind, null);
 });
+
+test("ALERT_ON=referrals ignores crawlers but still catches referrals", () => {
+  assert.equal(classify("Mozilla/5.0 (compatible; GPTBot/1.1)", null, LANDING, "referrals").kind, null);
+  assert.equal(classify("Mozilla/5.0", "https://chatgpt.com/", LANDING, "referrals").kind, "referral");
+  assert.equal(
+    classify("Mozilla/5.0", null, "https://mysite.com/?utm_source=perplexity", "referrals").kind,
+    "referral"
+  );
+});
+
+test("ALERT_ON=crawlers ignores referrals but still catches crawlers", () => {
+  assert.equal(classify("Mozilla/5.0 (compatible; GPTBot/1.1)", null, LANDING, "crawlers").kind, "crawler");
+  assert.equal(classify("Mozilla/5.0", "https://chatgpt.com/", LANDING, "crawlers").kind, null);
+  assert.equal(
+    classify("Mozilla/5.0", null, "https://mysite.com/?utm_source=chatgpt.com", "crawlers").kind,
+    null
+  );
+});
+
+test("default mode (both) detects either signal", () => {
+  assert.equal(classify("Mozilla/5.0 (compatible; GPTBot/1.1)", null, LANDING).kind, "crawler");
+  assert.equal(classify("Mozilla/5.0", "https://claude.ai/", LANDING).kind, "referral");
+});

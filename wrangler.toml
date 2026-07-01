@@ -14,8 +14,15 @@ compatibility_date = "2026-06-01"
 # id = "<your-kv-namespace-id>"
 
 [vars]
-# One crawler alert per vendor+purpose per N seconds. Set to "0" to alert on
-# every crawl (noisy), or raise it if your phone buzzes too much.
+# What to alert on: "referrals" (humans an AI sent you), "crawlers" (AI bots),
+# or "both". Default is "both". Crawlers can be thousands of hits a day while a
+# referral is rare and high-value, so many people set this to "referrals".
+# "referrals" also skips crawler detection entirely, so you need no KV namespace.
+ALERT_ON = "both"
+
+# Only used when crawler alerts are on. One crawler alert per vendor+purpose per
+# N seconds. Set to "0" to alert on every crawl (noisy), or raise it if your
+# phone buzzes too much.
 CRAWLER_THROTTLE_SECONDS = "3600"
 
 # ntfy is the zero-setup channel: no account, just install the ntfy app and
