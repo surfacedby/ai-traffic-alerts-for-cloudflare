@@ -63,6 +63,22 @@ test("ignores an unknown android-app package", () => {
   assert.equal(classify("Mozilla/5.0", "android-app://com.example.reader/", LANDING).kind, null);
 });
 
+test("catches Copilot/Grok human referrals by referer or utm_source", () => {
+  assert.equal(classify("Mozilla/5.0", "https://copilot.microsoft.com/", LANDING).vendor, "Microsoft Copilot");
+  assert.equal(classify("Mozilla/5.0", null, "https://mysite.com/?utm_source=copilot").vendor, "Microsoft Copilot");
+  assert.equal(classify("Mozilla/5.0", "https://grok.com/", LANDING).vendor, "Grok");
+  assert.equal(classify("Mozilla/5.0", null, "https://mysite.com/?utm_source=grok").vendor, "Grok");
+});
+
+test("cannot catch a Copilot/Grok bot fetch that wears a plain-browser user-agent", () => {
+  // Matches the log research: their provider fetch has no bot token, so in
+  // crawler mode there is nothing to detect. (A referer, if present, is a
+  // referral, not a crawl - hence the null here in crawlers-only mode.)
+  const botLike = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0 Safari/537.36";
+  assert.equal(classify(botLike, "https://copilot.microsoft.com/", LANDING, "crawlers").kind, null);
+  assert.equal(classify(botLike, null, LANDING, "crawlers").kind, null);
+});
+
 test("does NOT treat you.com as an AI referral (general search, ambiguous)", () => {
   // Same reasoning as bing.com / duckduckgo.com: you.com is a general search
   // engine, so a click from it is not reliably the AI product.
