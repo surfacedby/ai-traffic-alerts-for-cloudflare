@@ -1,7 +1,7 @@
 // Detection tests. Zero dependencies: run with `npm test` (node --test).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { classify } from "../src/worker.js";
+import { classify, resolveAlertMode } from "../src/worker.js";
 
 const LANDING = "https://mysite.com/pricing";
 
@@ -118,4 +118,13 @@ test("ALERT_ON=crawlers ignores referrals but still catches crawlers", () => {
 test("default mode (both) detects either signal", () => {
   assert.equal(classify("Mozilla/5.0 (compatible; GPTBot/1.1)", null, LANDING).kind, "crawler");
   assert.equal(classify("Mozilla/5.0", "https://claude.ai/", LANDING).kind, "referral");
+});
+
+test("ALERT_ON defaults to referrals (crawlers are opt-in)", () => {
+  assert.equal(resolveAlertMode({}), "referrals");
+  assert.equal(resolveAlertMode({ ALERT_ON: "" }), "referrals");
+  assert.equal(resolveAlertMode({ ALERT_ON: "nonsense" }), "referrals");
+  assert.equal(resolveAlertMode({ ALERT_ON: "BOTH" }), "both");
+  assert.equal(resolveAlertMode({ ALERT_ON: " Crawlers " }), "crawlers");
+  assert.equal(resolveAlertMode({ ALERT_ON: "referrals" }), "referrals");
 });

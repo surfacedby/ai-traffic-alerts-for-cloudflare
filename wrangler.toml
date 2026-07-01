@@ -15,10 +15,10 @@ compatibility_date = "2026-06-01"
 
 [vars]
 # What to alert on: "referrals" (humans an AI sent you), "crawlers" (AI bots),
-# or "both". Default is "both". Crawlers can be thousands of hits a day while a
-# referral is rare and high-value, so many people set this to "referrals".
-# "referrals" also skips crawler detection entirely, so you need no KV namespace.
-ALERT_ON = "both"
+# or "both". Default is "referrals": the rare, high-value signal. Crawlers can be
+# thousands of hits a day, so alerting on them is opt-in. "referrals" also skips
+# crawler detection entirely, so you need no KV namespace.
+ALERT_ON = "referrals"
 
 # Only used when crawler alerts are on. One crawler alert per vendor+purpose per
 # N seconds. Set to "0" to alert on every crawl (noisy), or raise it if your

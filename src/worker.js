@@ -5,18 +5,18 @@
 //   - a HUMAN arrives from an AI answer (ChatGPT, Perplexity, Gemini, Claude,
 //     Copilot, Grok...) - the rare, high-value signal, and
 //   - an AI CRAWLER fetches a page (train / index / answer live) - the far
-//     higher-volume signal, which you can turn off.
+//     higher-volume signal, off by default.
 //
 // It inspects each request at the edge, fires a best-effort notification OFF the
 // response path, and always passes the request straight through to your origin
 // unchanged. No tracking script, no database, no change to your pages.
 //
 // Choose what alerts with the ALERT_ON environment variable:
-//   - referrals (recommended): only humans an AI sent you. Crawler detection is
-//     skipped entirely, so you need no KV namespace.
+//   - referrals (default): only humans an AI sent you - the rare, high-value
+//     signal. Crawler detection is skipped entirely, so you need no KV namespace.
 //   - crawlers: only AI crawler hits.
-//   - both (default): both signals. A busy site's crawlers can be thousands of
-//     hits a day, so most people want ALERT_ON=referrals.
+//   - both: both signals. A busy site's crawlers can be thousands of hits a day,
+//     which is why they are opt-in.
 //
 // Deploy it two ways (see README):
 //   - Cloudflare dashboard (no terminal): paste this whole file into the Worker
@@ -154,7 +154,9 @@ function utmMatches(utm, target) {
 
 // Classify a request from its user-agent, referer, and landing URL.
 // `mode` (referrals | crawlers | both) gates which signals are even looked for,
-// so a referrals-only user pays no crawler-matching or KV cost.
+// so a referrals-only user pays no crawler-matching or KV cost. At runtime the
+// mode always comes from resolveAlertMode (product default: referrals); the
+// "both" here is only the raw-detector default for direct callers.
 // Returns { kind: "crawler" | "referral" | null, ... }.
 export function classify(userAgent, referer, url, mode = "both") {
   if (mode !== "referrals") {
@@ -396,11 +398,13 @@ async function sendAlert(env, { title, text, payload }) {
 
 const ALERT_MODES = new Set(["referrals", "crawlers", "both"]);
 
-// ALERT_ON picks which signals fire. Empty or unrecognized falls back to "both"
-// (the original behavior).
-function resolveAlertMode(env) {
+// ALERT_ON picks which signals fire. The shipped default is "referrals" - the
+// rare, high-value signal. Crawlers are far noisier (thousands of hits a day on
+// a busy site), so alerting on them is opt-in via ALERT_ON=crawlers or both.
+// Empty or unrecognized falls back to "referrals".
+export function resolveAlertMode(env) {
   const mode = String(env.ALERT_ON ?? "").toLowerCase().trim();
-  return ALERT_MODES.has(mode) ? mode : "both";
+  return ALERT_MODES.has(mode) ? mode : "referrals";
 }
 
 async function handleSignal(info, request, env) {

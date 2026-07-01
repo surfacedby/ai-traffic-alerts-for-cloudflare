@@ -2,7 +2,7 @@
 
 Get a push notification the moment an AI assistant sends you a real visitor: a person who clicked through from a ChatGPT, Perplexity, Gemini, Claude, Copilot, or Grok answer. A visitor an AI actively pointed at you is rare and high-value, and this tells you the instant it happens.
 
-It can also alert on **AI crawlers** fetching your pages (to train on them, index them, or answer a user live). That is the far higher-volume signal: a busy site sees thousands of crawler hits a day. One setting, `ALERT_ON`, chooses which signals fire (`referrals`, `crawlers`, or `both`; default `both`). Because crawlers are so much noisier, many people set `ALERT_ON=referrals`.
+It can also alert on **AI crawlers** fetching your pages (to train on them, index them, or answer a user live). That is the far higher-volume signal: a busy site sees thousands of crawler hits a day. One setting, `ALERT_ON`, chooses which signals fire (`referrals`, `crawlers`, or `both`); it **defaults to `referrals`** because crawlers are so much noisier. Turn them on with `ALERT_ON=crawlers` or `both`.
 
 It runs as a single Cloudflare Worker in front of your site, inspects each request at the edge, fires a notification to your phone, and passes the request straight through to your origin. No tracking script, no database, no change to your pages. Detection and notifications run off the response path, so your site is never slowed down.
 
@@ -25,32 +25,51 @@ The right-hand column is the actual job of AI visibility, and it needs measureme
 
 ## Setup
 
-You need a site that is **already on Cloudflare** (its traffic is proxied by Cloudflare, the orange cloud in your DNS). Then pick a path:
+You need a site that is **already on Cloudflare** (its traffic is proxied by Cloudflare, the orange cloud in your DNS).
 
-- **[Option A: Cloudflare dashboard](#option-a-cloudflare-dashboard-no-terminal)** - point and click, no terminal. Best if you are not a developer.
-- **[Option B: Command line](#option-b-command-line-wrangler)** - `git` and `wrangler`. Best if you live in a terminal or want it in version control.
+**First, pick a notification channel.** The zero-account option is [ntfy](https://ntfy.sh): install the ntfy app on your phone, tap **Subscribe to topic**, and enter a long, hard-to-guess topic name (treat it like a password, for example `ai-alerts-9f3k2p-mysite`). That topic name is all you need. Prefer Telegram, WhatsApp, Discord, or Pushover? See [Notification channels](#notification-channels).
 
-Either way, first do this one-minute step:
+Then get the Worker deployed one of three ways:
 
-**Pick a notification channel.** The zero-account option is [ntfy](https://ntfy.sh): install the ntfy app on your phone, tap **Subscribe to topic**, and enter a long, hard-to-guess topic name (treat it like a password, for example `ai-alerts-9f3k2p-mysite`). That topic name is all you need below. Prefer Telegram, Discord, or Pushover? See [Notification channels](#notification-channels).
+- **[Deploy from GitHub](#option-a-deploy-from-github-no-terminal)** - Cloudflare builds it straight from this repo. No terminal, no copy-paste.
+- **[Paste into the dashboard](#option-b-paste-into-the-dashboard-no-terminal)** - copy one file into the Worker editor. No terminal.
+- **[Command line](#option-c-command-line-wrangler)** - `git` + `wrangler`, for developers.
 
-### Option A: Cloudflare dashboard (no terminal)
+After the first two, do the one-time [Configure the Worker](#configure-the-worker-after-option-a-or-b) step.
+
+### Option A: Deploy from GitHub (no terminal)
+
+The easiest path: Cloudflare copies this repo into your own Git account and deploys it, so every later change auto-deploys.
+
+1. In the [Cloudflare dashboard](https://dash.cloudflare.com), open **Workers & Pages** and click **Create application**.
+2. On **Ship something new**, click **Continue with GitHub** (authorize Cloudflare if prompted; **Connect GitLab** works too).
+3. Click **Clone a public repository via Git URL** and paste:
+
+   ```
+   https://github.com/surfacedby/ai-traffic-alerts-for-cloudflare.git
+   ```
+
+4. On **Set up your application**, accept the defaults and click deploy. Cloudflare creates a private copy in your Git account and reads `wrangler.toml`, so `ALERT_ON` (referrals) and `CRAWLER_THROTTLE_SECONDS` are already filled in and the deploy command is `npx wrangler deploy`. **You can ignore everything under advanced** - the non-production-branch command, the build token, and any "token is missing permissions" notice. None of it matters for a straight deploy.
+5. Now do [Configure the Worker](#configure-the-worker-after-option-a-or-b) to add your notification channel and route.
+
+### Option B: Paste into the dashboard (no terminal)
 
 1. **Create the Worker.** In the [Cloudflare dashboard](https://dash.cloudflare.com), go to **Compute (Workers) -> Workers & Pages -> Create -> Start with Hello World -> Get started**. Give it a name like `ai-traffic-alerts` and create it.
+2. **Paste the code.** Click **Edit code** (the `</>` button). Select all of the sample code and delete it, then paste the entire contents of [`src/worker.js`](https://raw.githubusercontent.com/surfacedby/ai-traffic-alerts-for-cloudflare/master/src/worker.js) (open the link, select all, copy). Click **Deploy**.
+3. Now do [Configure the Worker](#configure-the-worker-after-option-a-or-b).
 
-2. **Paste the code.** Click **Edit code** (the `</>` button). Select all of the sample code and delete it, then paste the entire contents of [`src/worker.js`](https://raw.githubusercontent.com/surfacedby/ai-traffic-alerts-for-cloudflare/master/src/worker.js) from this repo (open that link, select all, copy). Click **Deploy**.
+### Configure the Worker (after Option A or B)
 
-3. **Add your notification channel.** Open the Worker's **Settings -> Variables and Secrets -> Add**. Add a variable named `NTFY_TOPIC` with your secret topic from above. (For channels that use a token, such as Telegram, choose the **Secret / Encrypt** type instead of plaintext. See [Notification channels](#notification-channels) for the exact names.)
+In the Worker's **Settings**:
 
-4. **Put it in front of your site.** In the Worker's **Settings -> Domains & Routes -> Add -> Route**. Set the route pattern to `yourdomain.com/*` and pick your zone. Choose **Route**, not *Custom domain*: a route runs the Worker on your existing site and passes traffic through to it, which is exactly what this tool does.
-
-5. **(Recommended) choose what to alert on.** Under **Settings -> Variables and Secrets -> Add**, add `ALERT_ON` set to `referrals`, `crawlers`, or `both`. It defaults to `both`, but crawlers can be thousands of hits a day while a real AI-referred visitor is rare, so most people set `ALERT_ON=referrals`. In `referrals` mode there is nothing more to do; you can skip the next step.
-
-6. **(Only if you alert on crawlers) stop them from spamming you.** With crawler alerts on, dedupe them to one per vendor per purpose per hour with a small KV store. Create it under **Storage & Databases -> KV -> Create a namespace**, name it `RADAR_KV`. Then back in the Worker, open **Settings -> Bindings -> Add binding -> KV namespace**, set the **Variable name** to exactly `RADAR_KV`, and select the namespace. Without it, busy crawlers alert more often (raise `CRAWLER_THROTTLE_SECONDS`, or set it to `0` while testing). `referrals` mode never touches KV.
+1. **Notification channel.** **Variables and Secrets -> Add** a variable named `NTFY_TOPIC` with your topic from above. For token-based channels (Telegram, WhatsApp, Pushover) use the **Secret / Encrypt** type; see [Notification channels](#notification-channels) for exact names.
+2. **What to alert on.** Add `ALERT_ON` set to `referrals`, `crawlers`, or `both`. It **defaults to `referrals`** (the rare, high-value signal, and it needs no KV), so you can even skip this. Turn on the noisy crawler signal only if you want it.
+3. **Put it in front of your site.** **Domains & Routes -> Add -> Route**, pattern `yourdomain.com/*`, your zone. Choose **Route**, not *Custom domain*: a route runs the Worker on your existing site and passes traffic through to it.
+4. **(Only if you set `ALERT_ON` to `crawlers` or `both`) throttle crawlers.** Create a KV namespace under **Storage & Databases -> KV -> Create a namespace**, name it `RADAR_KV`, then bind it in the Worker under **Settings -> Bindings -> Add binding -> KV namespace** with the **Variable name** `RADAR_KV`. It dedupes crawler alerts to one per vendor per purpose per hour. `referrals` mode never touches KV.
 
 That is it. See [Test that it works](#test-that-it-works) to confirm.
 
-### Option B: Command line (wrangler)
+### Option C: Command line (wrangler)
 
 You need Node and `npx`.
 
@@ -66,7 +85,7 @@ npm install
    routes = [ { pattern = "yourdomain.com/*", zone_name = "yourdomain.com" } ]
 
    [vars]
-   ALERT_ON = "referrals"   # referrals | crawlers | both (default both)
+   ALERT_ON = "referrals"   # referrals | crawlers | both (default referrals)
    NTFY_TOPIC = "your-long-secret-topic"
    ```
 
@@ -157,11 +176,11 @@ Set `GENERIC_WEBHOOK_URL` to any endpoint and the Worker POSTs the event as JSON
 
 `ALERT_ON` decides which signals fire:
 
-- **`referrals`** - only humans an AI sent you. The rare, high-value signal. Crawler detection is skipped entirely, so you need no `RADAR_KV` namespace and no throttling. A good default for most people.
+- **`referrals`** (the default) - only humans an AI sent you. The rare, high-value signal. Crawler detection is skipped entirely, so you need no `RADAR_KV` namespace and no throttling.
 - **`crawlers`** - only AI crawler hits. Useful if you care about training/indexing coverage.
-- **`both`** (the default) - both signals.
+- **`both`** - both signals.
 
-Empty or unrecognized values fall back to `both`.
+Empty or unrecognized values fall back to `referrals`.
 
 If you alert on crawlers, they can hit you a lot, so they are throttled to **one alert per vendor per purpose per hour**; human AI-referrals are **never** throttled, because a real person the AI sent you is the signal you always want. Change the window with `CRAWLER_THROTTLE_SECONDS` (set `0` to alert on every single crawl, useful while testing). Throttling uses the optional `RADAR_KV` namespace; without it the Worker still runs and simply does not dedupe. None of this applies in `referrals` mode.
 
