@@ -1,0 +1,77 @@
+// Detection tests. Zero dependencies: run with `npm test` (node --test).
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { classify } from "../src/worker.js";
+
+const LANDING = "https://mysite.com/pricing";
+
+test("detects an AI crawler by user-agent token", () => {
+  const r = classify("Mozilla/5.0 (compatible; GPTBot/1.1; +https://openai.com/gptbot)", null, LANDING);
+  assert.equal(r.kind, "crawler");
+  assert.equal(r.vendor, "OpenAI");
+  assert.equal(r.purpose, "training");
+});
+
+test("crawler matching is case-insensitive (Meta-ExternalAgent == meta-externalagent)", () => {
+  const a = classify("Meta-ExternalAgent/1.0", null, LANDING);
+  const b = classify("meta-externalagent/1.0", null, LANDING);
+  assert.equal(a.kind, "crawler");
+  assert.equal(a.vendor, "Meta");
+  assert.deepEqual({ kind: a.kind, vendor: a.vendor, purpose: a.purpose }, { kind: b.kind, vendor: b.vendor, purpose: b.purpose });
+});
+
+test("preserves the crawler purpose (train / index / answer live)", () => {
+  assert.equal(classify("ChatGPT-User/1.0", null, LANDING).purpose, "retrieval");
+  assert.equal(classify("OAI-SearchBot/1.0", null, LANDING).purpose, "search");
+  assert.equal(classify("ClaudeBot/1.0", null, LANDING).purpose, "training");
+});
+
+test("detects a human AI referral by referer host", () => {
+  const r = classify("Mozilla/5.0", "https://chatgpt.com/", LANDING);
+  assert.equal(r.kind, "referral");
+  assert.equal(r.vendor, "ChatGPT");
+  assert.equal(r.via, "referrer");
+});
+
+test("detects a human AI referral by utm_source when the referer is stripped", () => {
+  // ChatGPT and other AI apps often drop the referer and stamp utm_source
+  // instead; without this the visit would be invisible.
+  const r = classify("Mozilla/5.0", null, "https://mysite.com/p?utm_source=chatgpt.com");
+  assert.equal(r.kind, "referral");
+  assert.equal(r.vendor, "ChatGPT");
+  assert.equal(r.via, "utm_source");
+});
+
+test("utm_source matches a short token too (utm_source=perplexity)", () => {
+  const r = classify("Mozilla/5.0", null, "https://mysite.com/?utm_source=perplexity");
+  assert.equal(r.kind, "referral");
+  assert.equal(r.vendor, "Perplexity");
+});
+
+test("does NOT flag general search or social as an AI referral", () => {
+  // These are ambiguous: a click from Bing search or a link on X is almost
+  // never the AI product itself. Flagging them would cry wolf on normal traffic.
+  assert.equal(classify("Mozilla/5.0", "https://www.bing.com/search?q=x", LANDING).kind, null);
+  assert.equal(classify("Mozilla/5.0", "https://duckduckgo.com/", LANDING).kind, null);
+  assert.equal(classify("Mozilla/5.0", "https://x.com/", LANDING).kind, null);
+  assert.equal(classify("Mozilla/5.0", "https://www.google.com/", LANDING).kind, null);
+});
+
+test("ignores Google-Extended (a robots.txt token with no request user-agent)", () => {
+  // Google-Extended controls Gemini training via robots.txt and never crawls
+  // under its own user-agent, so it must not be listed and cannot appear here.
+  assert.equal(classify("Mozilla/5.0 Google-Extended", null, LANDING).kind, null);
+  // The real Applebot crawl (which the Applebot-Extended training toggle applies
+  // to) DOES send a user-agent and is correctly detected as Apple.
+  assert.equal(classify("Mozilla/5.0 (compatible; Applebot/0.1)", null, LANDING).vendor, "Apple");
+});
+
+test("returns kind:null for an ordinary human visit", () => {
+  assert.equal(classify("Mozilla/5.0 (Macintosh)", "https://news.ycombinator.com/", LANDING).kind, null);
+  assert.equal(classify("Mozilla/5.0 (Macintosh)", null, LANDING).kind, null);
+});
+
+test("tolerates missing / malformed inputs without throwing", () => {
+  assert.equal(classify(null, null, LANDING).kind, null);
+  assert.equal(classify("", "not a url", "also not a url").kind, null);
+});

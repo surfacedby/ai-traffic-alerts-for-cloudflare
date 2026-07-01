@@ -23,9 +23,12 @@ CRAWLER_THROTTLE_SECONDS = "3600"
 # NTFY_SERVER = "https://ntfy.sh"
 # NTFY_TOPIC = "change-me-to-something-secret"
 
-# Other channels are set as SECRETS (never commit them):
+# Other channels are set as SECRETS (never commit them). See the README for how
+# to obtain each value (Telegram bot token + chat id, WhatsApp CallMeBot key):
 #   npx wrangler secret put TELEGRAM_BOT_TOKEN
 #   npx wrangler secret put TELEGRAM_CHAT_ID
+#   npx wrangler secret put WHATSAPP_PHONE       # your number incl. country code, e.g. +15551234567
+#   npx wrangler secret put WHATSAPP_APIKEY      # from CallMeBot activation
 #   npx wrangler secret put DISCORD_WEBHOOK_URL
 #   npx wrangler secret put PUSHOVER_TOKEN
 #   npx wrangler secret put PUSHOVER_USER
