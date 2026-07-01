@@ -49,8 +49,8 @@ The easiest path: Cloudflare copies this repo into your own Git account and depl
    https://github.com/surfacedby/ai-traffic-alerts-for-cloudflare.git
    ```
 
-4. On **Set up your application**, accept the defaults and click deploy. Cloudflare creates a private copy in your Git account and reads `wrangler.toml`, so `ALERT_ON` (referrals) and `CRAWLER_THROTTLE_SECONDS` are already filled in and the deploy command is `npx wrangler deploy`. **You can ignore everything under advanced** - the non-production-branch command, the build token, and any "token is missing permissions" notice. None of it matters for a straight deploy.
-5. Now do [Configure the Worker](#configure-the-worker-after-option-a-or-b) to add your notification channel and route.
+4. On **Set up your application**, accept the defaults and click **Deploy**. Cloudflare creates a private copy in your Git account and reads `wrangler.toml`, so `ALERT_ON` (referrals) and `CRAWLER_THROTTLE_SECONDS` are already filled in and the deploy command is `npx wrangler deploy`. **You do not need to open Advanced settings** - ignore the non-production-branch build command, the build token, and any "token is missing permissions" notice. None of it matters here.
+5. Now do [Configure the Worker](#configure-the-worker-after-option-a-or-b): this deploy runs, but it will not alert anyone until you add a notification channel and a route.
 
 ### Option B: Paste into the dashboard (no terminal)
 
@@ -60,9 +60,9 @@ The easiest path: Cloudflare copies this repo into your own Git account and depl
 
 ### Configure the Worker (after Option A or B)
 
-In the Worker's **Settings**:
+The tool does not auto-pick where alerts go - it cannot know your phone or chat - so setting one notification channel is the single required step. Without it the Worker runs but stays silent (and logs "no notification channel is configured"). You do this in the Worker's own **Settings** after deploy; you do not need the wizard's Advanced settings.
 
-1. **Notification channel.** **Variables and Secrets -> Add** a variable named `NTFY_TOPIC` with your topic from above. For token-based channels (Telegram, WhatsApp, Pushover) use the **Secret / Encrypt** type; see [Notification channels](#notification-channels) for exact names.
+1. **Notification channel (required).** **Variables and Secrets -> Add** a variable named `NTFY_TOPIC` with your topic from above. For token-based channels (Telegram, WhatsApp, Pushover) use the **Secret / Encrypt** type; see [Notification channels](#notification-channels) for exact names. Set as many channels as you want - it alerts on all of them.
 2. **What to alert on.** Add `ALERT_ON` set to `referrals`, `crawlers`, or `both`. It **defaults to `referrals`** (the rare, high-value signal, and it needs no KV), so you can even skip this. Turn on the noisy crawler signal only if you want it.
 3. **Put it in front of your site.** **Domains & Routes -> Add -> Route**, pattern `yourdomain.com/*`, your zone. Choose **Route**, not *Custom domain*: a route runs the Worker on your existing site and passes traffic through to it.
 4. **(Only if you set `ALERT_ON` to `crawlers` or `both`) throttle crawlers.** Create a KV namespace under **Storage & Databases -> KV -> Create a namespace**, name it `RADAR_KV`, then bind it in the Worker under **Settings -> Bindings -> Add binding -> KV namespace** with the **Variable name** `RADAR_KV`. It dedupes crawler alerts to one per vendor per purpose per hour. `referrals` mode never touches KV.
@@ -226,6 +226,10 @@ The Worker stores nothing about your visitors. It reads the user-agent, referer,
 ## Beyond alerts
 
 This tool tells you an AI *touched* your site. The harder questions - which prompts you show up for, which exact sources the assistants cite, who they recommend instead of you, and whether any of it converts - need measurement across the assistants, not just your edge logs. That is the problem [SurfacedBy](https://surfacedby.com), the project behind this tool, works on.
+
+## Credits
+
+Built by [bomsn](https://github.com/bomsn) at [SurfacedBy](https://surfacedby.com).
 
 ## License
 

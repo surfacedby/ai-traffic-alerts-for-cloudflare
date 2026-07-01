@@ -9,6 +9,7 @@
     "test": "node --test"
   },
   "keywords": ["ai", "seo", "aeo", "geo", "chatgpt", "perplexity", "cloudflare-worker", "ai-crawler", "ai-visibility"],
+  "author": "bomsn (SurfacedBy) (https://github.com/bomsn)",
   "license": "MIT",
   "devDependencies": {
     "wrangler": "^4.0.0"
