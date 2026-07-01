@@ -217,7 +217,7 @@ The core idea - that "AI traffic" is really two separate signals (a provider fet
 - **Google AI Overviews / AI Mode referrals** arrive as plain `google.com` and are indistinguishable from an ordinary Google click, so they are not flagged (flagging them would mislabel most of your Google traffic).
 - **User-agents can be spoofed.** This is an alerting tool, so a rare spoofed crawler UA just means one extra notification, not a security hole.
 
-These asymmetries across vendors are the subject of the research above; measuring AI-driven traffic evenly across every assistant needs cross-assistant measurement, not edge logs alone.
+These asymmetries across vendors are not guesswork; they are what our own server-log research found: [What nginx logs prove about AI traffic vs referral traffic](https://surfacedby.com/blog/nginx-logs-ai-traffic-vs-referral-traffic). Measuring AI-driven traffic evenly across every assistant needs cross-assistant measurement, not edge logs alone.
 
 ## Privacy
 
@@ -229,7 +229,7 @@ This tool tells you an AI *touched* your site. The harder questions - which prom
 
 ## Credits
 
-Built by [bomsn](https://github.com/bomsn) at [SurfacedBy](https://surfacedby.com).
+Built by [Ali Khallad](https://github.com/bomsn) at [SurfacedBy](https://surfacedby.com).
 
 ## License
 
