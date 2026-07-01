@@ -20,7 +20,7 @@ Most "AI bot" tools are about *blocking*. But the AI crawl is not the threat, it
 | Which page they hit, and the visitor's country | Whether the AI recommended a **competitor** instead of you |
 | Real-time, at your edge | Whether that visibility turned into **signups or revenue** |
 
-The right-hand column is the actual job of AI visibility, and it needs measurement across the assistants, not just your own logs. That is what [SurfacedBy](https://surfacedby.com) does: it shows which AI engines cite you, on which prompts, the exact sources they pull, who gets cited instead of you, and whether it converts. This tool is the free first look; SurfacedBy is the full picture. Run a free audit of your domain at [surfacedby.com](https://surfacedby.com).
+The right-hand column is the actual job of AI visibility, and it needs measurement across the assistants, not just your own logs. This tool is the free first look at what reaches your edge.
 
 ---
 
@@ -188,19 +188,15 @@ Both lists live at the top of [`src/worker.js`](src/worker.js). These signatures
 - **Google AI Overviews / AI Mode referrals** arrive as plain `google.com` and are indistinguishable from an ordinary Google click, so they are not flagged (flagging them would mislabel most of your Google traffic).
 - **User-agents can be spoofed.** This is an alerting tool, so a rare spoofed crawler UA just means one extra notification, not a security hole.
 
-These asymmetries across vendors are the subject of the research above; measuring AI-driven traffic evenly across every assistant needs cross-assistant measurement, not edge logs alone. For the parts this cannot see - citations, prompts, competitors, and revenue across every assistant - use [SurfacedBy](https://surfacedby.com).
+These asymmetries across vendors are the subject of the research above; measuring AI-driven traffic evenly across every assistant needs cross-assistant measurement, not edge logs alone.
 
 ## Privacy
 
 The Worker stores nothing about your visitors. It reads the user-agent, referer, and `utm_source` of each request, sends you a notification, and forwards the request to your origin. The optional KV holds only short-lived throttle keys like `radar:OpenAI:training`, never visitor data.
 
-## From alerts to answers
+## Beyond alerts
 
-This tool tells you an AI *touched* your site. The harder questions come next: which prompts you show up for, which exact sources the assistants cite, who they recommend instead of you, and whether any of it turns into signups or revenue. Those need measurement across the assistants, not just your edge logs.
-
-That is what we built [SurfacedBy](https://surfacedby.com) to do, across ChatGPT, Perplexity, Gemini, Claude, and Google AI. This tool is the free first look; SurfacedBy is the full picture.
-
-**Run a free audit of your domain at [surfacedby.com](https://surfacedby.com).**
+This tool tells you an AI *touched* your site. The harder questions - which prompts you show up for, which exact sources the assistants cite, who they recommend instead of you, and whether any of it converts - need measurement across the assistants, not just your edge logs. That is the problem [SurfacedBy](https://surfacedby.com), the project behind this tool, works on.
 
 ## License
 
