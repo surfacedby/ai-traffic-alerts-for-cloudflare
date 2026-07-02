@@ -126,6 +126,8 @@ Where to put the values: `NTFY_TOPIC` and every channel token are **Secrets**, n
 2. Tap **Subscribe to topic** and enter a long, hard-to-guess name (anyone who knows the topic can see your alerts, so treat it like a password, for example `ai-alerts-9f3k2p-mysite`).
 3. Set `NTFY_TOPIC` to that exact name. Self-hosting ntfy? Also set `NTFY_SERVER` (defaults to `https://ntfy.sh`).
 
+**ntfy.sh free-tier quota.** The free `ntfy.sh` server caps how many messages you can publish per day, and that limit is per publishing IP. The Worker publishes from Cloudflare's shared egress IPs, so the quota can be reached faster than expected, especially with heavy testing or with `ALERT_ON` set to `crawlers` or `both` (thousands of hits a day will exhaust it quickly). Free ntfy is fine for the rare `referrals` signal; for crawler mode or any real volume, use a per-account channel (Telegram, Discord, or Pushover), or self-host ntfy and point `NTFY_SERVER` at it. When the quota is hit, publishing returns HTTP 429 (see [Troubleshooting](#troubleshooting)) and resets daily.
+
 ### Telegram setup (2 minutes)
 
 1. In Telegram, message [@BotFather](https://t.me/BotFather), send `/newbot`, and follow the prompts. It gives you a **bot token** like `123456:ABC-DEF...` -> that is `TELEGRAM_BOT_TOKEN`.
@@ -194,12 +196,13 @@ The alert names the site the visitor actually hit (the request Host). If you tes
 Not getting alerts? Check, in order:
 
 1. **Is the Worker on your traffic?** In the dashboard, confirm the **Route** shows `yourdomain.com/*` on the right zone, and that your site is proxied by Cloudflare (orange cloud in DNS). A Worker with no matching route never runs.
-2. **Read the Worker logs.** Open the Worker -> **Logs** (or `npx wrangler tail`) and reload your test URL. The logs are explicit about the common failures:
+2. **Read the Worker logs.** Enable **Observability** first (Worker -> **Settings -> Observability**); that is what surfaces channel send failures. Then open the Worker -> **Logs** (or `npx wrangler tail`) and reload your test URL. The logs are explicit about the common failures:
    - `AI signal detected but NO notification channel is configured` - you have not set `NTFY_TOPIC` or any other channel.
    - `telegram channel failed: HTTP 401 ...` (or ntfy/whatsapp/discord/pushover/webhook) - the channel is set but the token, chat id, key, or URL is wrong. The status code tells you which.
 3. **A channel shows in Settings but the log says no channel is configured (or a token looks set but fails empty)?** On the Deploy-from-GitHub path this means you added that value as a plaintext (Text) variable and the last build wiped it. This is true for **every** channel value, not just ntfy. Re-add each one (`NTFY_TOPIC`, `TELEGRAM_BOT_TOKEN`, and the rest) with **Type: Secret**, which survives builds, then redeploy.
 4. **Subscribed to the right ntfy topic?** The topic in the app must match `NTFY_TOPIC` exactly, and notifications must be enabled for the ntfy app on your phone.
 5. **Crawler alert throttled?** You only get one per vendor per purpose per hour. Set `CRAWLER_THROTTLE_SECONDS=0` and test again.
+6. **Alerts stopped after working at first?** Check the Worker's **Observability** logs. `ntfy channel failed: HTTP 429 ... daily message quota reached` means you hit ntfy.sh's free daily limit (reached faster because the Worker publishes from Cloudflare's shared IPs, and immediately in `crawlers`/`both` mode). It resets daily. For reliable alerting use a per-account channel (Telegram, Discord, Pushover), self-host ntfy and set `NTFY_SERVER`, or upgrade ntfy.sh.
 
 **Deploy returns HTTP 400 (before any build runs).** You used **Clone a public repository via Git URL** and the Cloudflare GitHub App cannot create the copied repo in your account. Fork the repo to your account and import your fork instead (Option A above), or widen the Cloudflare GitHub App's repository access in GitHub under **Settings -> Applications -> Installed GitHub Apps -> Cloudflare -> Configure**.
 
